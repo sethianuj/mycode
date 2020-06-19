@@ -1,0 +1,77 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: docker-private-registry
+  name: docker-private-registry-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docker-private-registry
+  template:
+    metadata:
+      labels:
+        app: docker-private-registry
+    spec:
+      containers:
+      - image: registry:2
+        imagePullPolicy: IfNotPresent
+        name: docker-private-registry
+        env:
+        - name: REGISTRY_HTTP_ADDR
+          value: 0.0.0.0:5000
+        - name: REGISTRY_HTTP_TLS_CERTIFICATE
+          value: /certs/cert.crt
+        - name: REGISTRY_HTTP_TLS_KEY
+          value: /certs/cert.key
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /var/lib/registry
+          name: image-store
+        - mountPath: /certs
+          name: certs
+      volumes:
+      - emptyDir: {} # THIS IS NOT PERSISTENT! WILL DELETE WITH POD!
+        name: image-store
+      - name: certs
+        secret:
+          secretName: registry-tls
+          items:
+          - key: tls.crt
+            path: cert.crt
+            mode: 256 # 0400 in decimal
+          - key: tls.key
+            path: cert.key
+            mode: 256 # 0400 in decimal
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: docker-private-registry
+  name: docker-private-registry
+spec:
+  ports:
+  - nodePort: 30500
+    port: 5000
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    app: docker-private-registry
+  type: NodePort
+
+---
+apiVersion: v1
+kind: Secret
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUVERENDQXZTZ0F3SUJBZ0lVVFptcnRVKzJlNCtkaGRqU0RGYzdURGpXY1Vjd0RRWUpLb1pJaHZjTkFRRUwKQlFBd2NERUxNQWtHQTFVRUJoTUNWVk14RlRBVEJnTlZCQWdUREZCbGJtNXplV3gyWVc1cFlURVRNQkVHQTFVRQpCeE1LU0dGeWNtbHpZblZ5WnpFVE1CRUdBMVVFQ2hNS1MzVmlaWEp1WlhSbGN6RUxNQWtHQTFVRUN4TUNRMEV4CkV6QVJCZ05WQkFNVENrdDFZbVZ5Ym1WMFpYTXdIaGNOTWpBd05qRTFNVGd5TkRBd1doY05NakV3TmpFMU1UZ3kKTkRBd1dqQnhNUXN3Q1FZRFZRUUdFd0pWVXpFVk1CTUdBMVVFQ0JNTVVHVnVibk41YkhaaGJtbGhNUk13RVFZRApWUVFIRXdwSVlYSnlhWE5pZFhKbk1STXdFUVlEVlFRS0V3cExkV0psY201bGRHVnpNU0V3SHdZRFZRUUxFeGhMCmRXSmxjbTVsZEdWeklGUm9aU0JCYkhSaE15QlhZWGt3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXcKZ2dFS0FvSUJBUUROQTFpUGlGcGlvM2FYMjRoSngzZkJaclIxZmtzalk4TjIwTERaQ2ZYb3BTQndBM012QmNVcQpmVm5IQ1BnMmJURzhDbXVsYmh1MldnR0w5aTY1cVRtNE9kc1p1N21QTmxqaFR0cjdPZGtFQmJxTUJ0bzNPbUYwCkd6OUpIc1BRTlFkR3Z0OWtlenlZa05kaGg1Zm5lWDhaRW5SbFNGYnNKaktuL1ArZVkwdWVLdnR4UUJpVjRmejEKaDdpOE5HRTBodjNpZFZhNjZnVnNsd251NXpVYjFaNm92QkFTUktTYXZoeEYvSndMUzZuZVM5MUwxTnRYcndibgpKQ0RDUWxuaVlUN1hWZVIxcUloZjVpTVNKWjlpM1VQcStackV6OC93YlpraHR4M3lBOWtWRGJnMUxHYVJYTG9zClM2cHgwdXZVRVRKUmdHVTRMaHBEQWtxY0NOQU05Q2Y5QWdNQkFBR2pnWnd3Z1prd0RnWURWUjBQQVFIL0JBUUQKQWdXZ01CMEdBMVVkSlFRV01CUUdDQ3NHQVFVRkJ3TUJCZ2dyQmdFRkJRY0RBakFNQmdOVkhSTUJBZjhFQWpBQQpNQjBHQTFVZERnUVdCQlI2dnYrR0h4N3VIWlpscjQ5cVgyb2lweVZnTHpBZkJnTlZIU01FR0RBV2dCUTlVamk1CnNrZUtXdlEwdWg3dWwzVzZlSkVLV0RBYUJnTlZIUkVFRXpBUmdnbHNiMk5oYkdodmMzU0hCSDhBQUFFd0RRWUoKS29aSWh2Y05BUUVMQlFBRGdnRUJBQ21mWjJXbVJReEhwc3JLdUpuWEI2WU9MSUtCbkhBaXlrVWR5aE16RitSaQpNQjhhbUpPQmdZdWhsRCtETHJudENJeElPczVoL1cwcGFSMDVMM2NRWG0xS3FJZDdRckdubTNGb0pSc0dtUmdnCmZITjJjR2ZudW1YdHNzSSszQTVDOTdia2wzRUFCN2pqZDA2d0V0N3ZRU3lmYlJoYjIwYVF1akg5czRaUlZUMmMKbUtseUM0M0RkTmhWN09ka3lSN0FwR2lEQVZEWjJJMThTR21WNVpsV1pQNzY3VVdmRkRpd05WZzExbHkxZUxidwpqWHhBY2M4ZGdZZUdLZExRVXgrWjJEUzRBRkszV21qWjZvL0tiMFFoVmRscDZNdndxMk5makxFTkFrcDlEdXdUCk9jVWprb0g2M0hXV3RiOEZnNDZqN0tsTC81ZGp5anNiWlRGOGZpdmNONHM9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K #run this command in a terminal and copy results to left of # sign: base64 -w0 ~/k8s-certs/registry-web.pem && echo
+  tls.key: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcEFJQkFBS0NBUUVBelFOWWo0aGFZcU4ybDl1SVNjZDN3V2EwZFg1TEkyUERkdEN3MlFuMTZLVWdjQU56Ckx3WEZLbjFaeHdqNE5tMHh2QXBycFc0YnRsb0JpL1l1dWFrNXVEbmJHYnU1anpaWTRVN2Erem5aQkFXNmpBYmEKTnpwaGRCcy9TUjdEMERVSFJyN2ZaSHM4bUpEWFlZZVg1M2wvR1JKMFpVaFc3Q1l5cC96L25tTkxuaXI3Y1VBWQpsZUg4OVllNHZEUmhOSWI5NG5WV3V1b0ZiSmNKN3VjMUc5V2VxTHdRRWtTa21yNGNSZnljQzB1cDNrdmRTOVRiClY2OEc1eVFnd2tKWjRtRSsxMVhrZGFpSVgrWWpFaVdmWXQxRDZ2bWF4TS9QOEcyWkliY2Q4Z1BaRlEyNE5TeG0Ka1Z5NkxFdXFjZExyMUJFeVVZQmxPQzRhUXdKS25BalFEUFFuL1FJREFRQUJBb0lCQUFmUWN0VzF1c3c3c3MrQwovS1RqUjN0RnNPY3hreWVjSzkwaGd6d2lsdzd4REZWNHJERkVwUWxEa2VKMlF3L0FCYjlISG1kRjFTU1VOYTdpCkNWSG1VMTdrUmFlcmNoMDFVeG56YVlGZDZSbXdKallrSkxrcUxvREFjUjhXWHh4V2lScDNPQWlhY2VyV3luN2IKTGowU2NuZkFMbE9WK0VvMEFvWklyRzJiRjB6R0FTVWZ6ZVZ3TnMyMTdCSDlaYlhtYURxU3kvSkJab2orSDVlcgpCZjNMenZNOFhOcFBDa2RMMTZVVWIzY3laTm9ZcXF5eDRsTGhYZHdlMVJqZkExeVZUdmh4MnpkTHhwTEJ0L0wvCjJOUXYweG9IL0E0SForSUlMZ0VWeC9WUUNXa2NNVVNETm5WeDN2SUwydGM2Y09tV0h3dVliUldYZGpNaEdBYnMKeFpVWG9rRUNnWUVBMkRBQmRaVjRpL01kejBUZU1IYmZiRkljN3MrajdHMmUxLzBlV3RvMVFnaGQxU3hMVGIvUgpNU2NDbzc0ckFqbittWkdhUjVLK3BHRllCTDFScXRBcG5DSm1lN1lUMTd3SVNKWGFCbFJyQkVkaEJUV2RMeUw0CjlQRUwxeVpRemZMdFBzUklkS2VrU3hXcVFtM1JibHJ1dVc2aFJFUFJUbGlaR2lxNGFVWnk3T2tDZ1lFQThzU0gKZjlOTytlN2VKaVQrNkF6MnErZFpsUnUyVmoxcWdVbHlNQTFoa1AxOS9ZdVlpVDNwSWZUeld1MDRCQWZDT0ZDZAplRzVGWG5uV3BJNUJOZnFUNmtPMTJWeEcwU3pBclIxcStaZExsVlFwNVJXQkkyd1hZUW1LL1lMd0RITlZVUDJtCnhDTjhpMkhGTHlFdkxzT2l0d1R6SlVISWJJditzY1hoMzdmVDVmVUNnWUVBem14Z0tGYzFpR1AyVmIvTGJIbEUKOHBnaE9rSVhvcHcxTE1WcTQ1TXhnVUNkMy90d1YrZk5KbUs2V1lFdWJlelVWdXc1WlJnUVlzTDBHV3B2L1dyUQpJRjZVZnBHbnRybTdLeHV5MTVKcHNPYzdFNDlTNi93M3ZTSWdqU252eEFhdVU5MTExYlZ3NGFUcE1vN0xoOVRaCjEwTjBSc3Qrb3BGa2R5RE5mdkFlc21rQ2dZRUFqWkFjazJWZEFGRlNLVndaYUtkbWtBZHdMWXJqWUphZnJKUnYKaWFYRDV4QnFqNWIvYzhndVVpYk1ZWkZDd05ibFlvRmYwZ0k3WVVRYTdnb2w3SndaOU5sWENWRE4ydHdGM3V6dwpuR3FsSUliYmgwSnE4NFRzZlNGYmMwa1BRYk5mWk1NRXBBc3RiUG11U2pWSGxqVnVoTnJXRGp1MTY5WVd4d05sCkcxZk9zS0VDZ1lCeWkxRFoyWHhEenozQmVhVHhGTmRWOUNhZTAyQStiTWJnMWlmMjUzR3NldTNhVUZpZFZ4RmMKMXZNaUgrOTBpSHgrNitsRWtLaTNLK1pHa2h6NDYzOW1hKzNlUUJwdDBpUlVQVnFLOFI1aGduSnplNlFrQWNzSQpKV0hnNkNwaHBYWWkvMllHYjIreWRKNlVYc2xsd0xORmliMldHa2ZCQ2l2K3JUbWNSWlBRanc9PQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo= #run this command in a terminal and copy results to left of # sign: base64 -w0 ~/k8s-certs/registry-web-key.pem && echo
+metadata:
+  name: registry-tls
+  namespace: default
+type: Opaque
+
